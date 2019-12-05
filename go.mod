@@ -1,4 +1,4 @@
-module git.coding.net/cg33/ginx
+module git.coding.net/cg33/ginx.git
 
 go 1.13
 
