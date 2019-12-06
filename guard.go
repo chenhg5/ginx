@@ -6,12 +6,12 @@ import (
 )
 
 type Guard interface {
-	Guard(c *gin.Context) (interface{}, error)
+	Guard(c *gin.Context) (interface{}, E)
 }
 
-type GuardRes func(c *gin.Context, err error)
+type GuardRes func(c *gin.Context, err E)
 
-var defaultGuardRes = func(c *gin.Context, err error) {
+var defaultGuardRes = func(c *gin.Context, err E) {
 	c.JSON(http.StatusBadRequest, gin.H{
 		"code": 400,
 		"msg":  err.Error(),
@@ -27,10 +27,10 @@ func ParamValidator(g Guard) gin.HandlerFunc {
 
 		var (
 			param interface{}
-			err   error
+			err   E
 		)
 
-		if param, err = g.Guard(c); err != nil {
+		if param, err = g.Guard(c); !err.Empty() {
 			defaultGuardRes(c, err)
 			c.Abort()
 			return
