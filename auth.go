@@ -13,10 +13,10 @@ type Auth interface {
 	Logout(http *http.Request, w http.ResponseWriter) bool
 }
 
-var jwtAuth Auth
+var JWTAuth Auth
 
 func RegisterJWTAuth(secret, alg, header string, exp time.Duration) {
-	jwtAuth = newJwtAuthDriver(secret, alg, header, exp)
+	JWTAuth = newJwtAuthDriver(secret, alg, header, exp)
 }
 
 var defaultFilterRes = func(c *gin.Context) {
@@ -32,7 +32,7 @@ func SetDefaultFilterRes(d gin.HandlerFunc) {
 
 func JWTMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !jwtAuth.Check(c) {
+		if !JWTAuth.Check(c) {
 			defaultFilterRes(c)
 			c.Abort()
 		}
@@ -41,5 +41,5 @@ func JWTMiddleware() gin.HandlerFunc {
 }
 
 func User(c *gin.Context) map[string]interface{} {
-	return jwtAuth.User(c).(map[string]interface{})
+	return JWTAuth.User(c).(map[string]interface{})
 }
