@@ -35,7 +35,7 @@ func EmptyError() E {
 }
 
 func NewError(msg string) E {
-	return E{code: Error, message: msg, exist: true}
+	return E{code: 500, message: msg, exist: true}
 }
 
 func NewWithCode(msg string, code Code) E {
