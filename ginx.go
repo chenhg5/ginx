@@ -1,9 +1,12 @@
 package ginx
 
 import (
+	"github.com/gavv/httpexpect"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
+	"net/http"
 	"runtime"
+	"testing"
 )
 
 type GinX struct {
@@ -38,4 +41,20 @@ func (g *GinX) Run() {
 	} else {
 		gin.SetMode(gin.ReleaseMode)
 	}
+}
+
+func NewWithRouter(router *gin.Engine) *GinX {
+	return &GinX{
+		Router: router,
+	}
+}
+
+func (g *GinX) Expect(t *testing.T) *httpexpect.Expect {
+	return httpexpect.WithConfig(httpexpect.Config{
+		Client: &http.Client{
+			Transport: httpexpect.NewBinder(g.Router),
+			Jar:       httpexpect.NewJar(),
+		},
+		Reporter: httpexpect.NewAssertReporter(t),
+	})
 }
