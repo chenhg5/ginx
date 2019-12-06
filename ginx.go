@@ -15,10 +15,17 @@ type GinX struct {
 	config Config
 }
 
+type process func(*gin.Engine)
+
 func New() *GinX {
 	return &GinX{
 		Router: gin.New(),
 	}
+}
+
+func (g *GinX) InjectRouter(proc process) *GinX {
+	proc(g.Router)
+	return g
 }
 
 func (g *GinX) SetConfig(config Config) *GinX {
