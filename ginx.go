@@ -1,12 +1,17 @@
 package ginx
 
 import (
+	"context"
 	"github.com/gavv/httpexpect"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
+	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"runtime"
 	"testing"
+	"time"
 )
 
 type GinX struct {
@@ -38,7 +43,7 @@ func (g *GinX) Use(middleware ...gin.HandlerFunc) *GinX {
 	return g
 }
 
-func (g *GinX) Run() {
+func (g *GinX) Run(port ...string) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	if g.config.Debug() {
@@ -48,6 +53,35 @@ func (g *GinX) Run() {
 	} else {
 		gin.SetMode(gin.ReleaseMode)
 	}
+
+	if len(port) == 0 {
+		port = []string{"80"}
+	}
+
+	srv := &http.Server{
+		Addr:    ":" + port[0],
+		Handler: g.Router,
+	}
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err)
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server with
+	// a timeout of 10 seconds.
+	quit := make(chan os.Signal)
+	signal.Notify(quit, os.Interrupt)
+	<-quit
+	log.Println("Shutdown Server ...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatal("Server Shutdown:", err)
+	}
+	log.Println("Server exiting")
 }
 
 func NewWithRouter(router *gin.Engine) *GinX {
