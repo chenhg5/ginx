@@ -16,6 +16,9 @@ type Auth interface {
 var JWTAuth Auth
 
 func RegisterJWTAuth(secret, alg, header string, exp time.Duration) {
+	if JWTAuth != nil {
+		panic("can not set twice!")
+	}
 	JWTAuth = newJwtAuthDriver(secret, alg, header, exp)
 }
 

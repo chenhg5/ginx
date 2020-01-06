@@ -2,11 +2,12 @@ package ginx
 
 import (
 	"encoding/json"
-	jwt_lib "github.com/dgrijalva/jwt-go"
-	"github.com/dgrijalva/jwt-go/request"
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"time"
+
+	lib "github.com/dgrijalva/jwt-go"
+	"github.com/dgrijalva/jwt-go/request"
+	"github.com/gin-gonic/gin"
 )
 
 type jwtManager struct {
@@ -31,8 +32,8 @@ func (app *jwtManager) Check(c *gin.Context) bool {
 	if token == "" {
 		return false
 	}
-	var keyFun jwt_lib.Keyfunc
-	keyFun = func(token *jwt_lib.Token) (interface{}, error) {
+	var keyFun lib.Keyfunc
+	keyFun = func(token *lib.Token) (interface{}, error) {
 		b := []byte(app.secret)
 		return b, nil
 	}
@@ -67,24 +68,24 @@ func (app *jwtManager) Check(c *gin.Context) bool {
 // contains the user ID. The token string must start with "Bearer "
 func (app *jwtManager) User(c *gin.Context) interface{} {
 
-	var jwtToken *jwt_lib.Token
+	var jwtToken *lib.Token
 	if jwtUser, exist := c.Get("User"); !exist {
 		tokenStr := c.Request.Header.Get(app.header)
 		if tokenStr == "" {
 			panic("非法token")
 		}
 		var err error
-		jwtToken, err = jwt_lib.Parse(tokenStr, func(token *jwt_lib.Token) (interface{}, error) {
+		jwtToken, err = lib.Parse(tokenStr, func(token *lib.Token) (interface{}, error) {
 			return []byte(app.secret), nil
 		})
 		if err != nil {
 			panic("非法token")
 		}
 	} else {
-		jwtToken = jwtUser.(map[string]interface{})["token"].(*jwt_lib.Token)
+		jwtToken = jwtUser.(map[string]interface{})["token"].(*lib.Token)
 	}
 
-	if claims, ok := jwtToken.Claims.(jwt_lib.MapClaims); ok && jwtToken.Valid {
+	if claims, ok := jwtToken.Claims.(lib.MapClaims); ok && jwtToken.Valid {
 		var user map[string]interface{}
 		if err := json.Unmarshal([]byte(claims["user"].(string)), &user); err != nil {
 			panic("非法token")
@@ -103,13 +104,13 @@ var timeZone, _ = time.LoadLocation("Asia/Shanghai")
 
 func (app *jwtManager) Login(http *http.Request, w http.ResponseWriter, user map[string]interface{}) interface{} {
 
-	token := jwt_lib.New(jwt_lib.GetSigningMethod(app.alg))
+	token := lib.New(lib.GetSigningMethod(app.alg))
 	// Set some claims
 	userStr, err := json.Marshal(user)
 	if err != nil {
 		return nil
 	}
-	token.Claims = jwt_lib.MapClaims{
+	token.Claims = lib.MapClaims{
 		"user": string(userStr),
 		"exp":  time.Now().In(timeZone).Add(app.exp).Unix(),
 	}
