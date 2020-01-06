@@ -9,9 +9,9 @@ type Guard interface {
 	Guard(c *gin.Context) (interface{}, E)
 }
 
-type GuardRes func(c *gin.Context, err E)
+type GuardRes func(c *gin.Context, err error)
 
-var defaultGuardRes = func(c *gin.Context, err E) {
+var defaultGuardRes = func(c *gin.Context, err error) {
 	c.JSON(http.StatusBadRequest, gin.H{
 		"code": 400,
 		"msg":  err.Error(),
