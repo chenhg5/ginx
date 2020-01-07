@@ -46,3 +46,7 @@ func JWTMiddleware() gin.HandlerFunc {
 func User(c *gin.Context) map[string]interface{} {
 	return JWTAuth.User(c).(map[string]interface{})
 }
+
+func JWTAuthToken(r *http.Request, w http.ResponseWriter, m map[string]interface{}) string {
+	return JWTAuth.Login(r, w, m).(string)
+}
