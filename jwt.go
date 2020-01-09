@@ -11,20 +11,38 @@ import (
 )
 
 type jwtManager struct {
-	secret string
-	exp    time.Duration
-	alg    string
-	header string
+	secret    string
+	exp       time.Duration
+	alg       string
+	header    string
+	filterFun gin.HandlerFunc
 }
 
-func newJwtAuthDriver(secret, alg, header string, exp time.Duration) *jwtManager {
+type JWTAuthConfig struct {
+	Secret    string
+	Exp       time.Duration
+	Alg       string
+	Header    string
+	FilterFun gin.HandlerFunc
+}
+
+func newJwtAuthDriver(cfg JWTAuthConfig) *jwtManager {
+	if cfg.FilterFun == nil {
+		cfg.FilterFun = defaultFilterRes
+	}
 	return &jwtManager{
-		secret: secret,
-		exp:    exp,
-		alg:    alg,
-		header: header,
+		secret:    cfg.Secret,
+		exp:       cfg.Exp,
+		alg:       cfg.Alg,
+		header:    cfg.Header,
+		filterFun: cfg.FilterFun,
 	}
 }
+
+const (
+	contextJWTUserTokenKey = "auth_user_jwt_token"
+	contextJWTUser         = "auth_user_jwt"
+)
 
 // Check the token of request header is valid or not.
 func (app *jwtManager) Check(c *gin.Context) bool {
@@ -32,13 +50,24 @@ func (app *jwtManager) Check(c *gin.Context) bool {
 	if token == "" {
 		return false
 	}
-	var keyFun lib.Keyfunc
-	keyFun = func(token *lib.Token) (interface{}, error) {
+	authJwtToken, err := app.user(c)
+
+	if err != nil {
+		return false
+	}
+
+	c.Set(contextJWTUserTokenKey, authJwtToken)
+
+	return authJwtToken.Valid
+}
+
+func (app *jwtManager) user(c *gin.Context) (*lib.Token, error) {
+	var keyFun = func(token *lib.Token) (interface{}, error) {
 		b := []byte(app.secret)
 		return b, nil
 	}
 
-	authJwtToken, err := request.ParseFromRequest(c.Request, &request.MultiExtractor{
+	return request.ParseFromRequest(c.Request, &request.MultiExtractor{
 		&request.PostExtractionFilter{
 			Extractor: request.HeaderExtractor{app.header},
 			Filter: func(s string) (string, error) {
@@ -47,62 +76,46 @@ func (app *jwtManager) Check(c *gin.Context) bool {
 		},
 		request.ArgumentExtractor{app.header},
 	}, keyFun)
-
-	if err != nil {
-		//logger.Info(logger.E{
-		//	Title:    "jwt auth check",
-		//	Function: "jwt.Check",
-		//	Error:    err,
-		//})
-		return false
-	}
-
-	c.Set("User", map[string]interface{}{
-		"token": authJwtToken,
-	})
-
-	return authJwtToken.Valid
 }
 
 // User is get the auth user from token string of the request header which
 // contains the user ID. The token string must start with "Bearer "
-func (app *jwtManager) User(c *gin.Context) interface{} {
+func (app *jwtManager) User(c *gin.Context, userPointer interface{}) {
 
-	var jwtToken *lib.Token
-	if jwtUser, exist := c.Get("User"); !exist {
-		tokenStr := c.Request.Header.Get(app.header)
-		if tokenStr == "" {
-			panic("非法token")
-		}
+	var (
+		jwtToken     *lib.Token
+		exist        bool
+		valInterface interface{}
+	)
+
+	if valInterface, exist = c.Get(contextJWTUser); exist {
+		userPointer = valInterface
+		return
+	}
+
+	if valInterface, exist = c.Get(contextJWTUserTokenKey); !exist {
 		var err error
-		jwtToken, err = lib.Parse(tokenStr, func(token *lib.Token) (interface{}, error) {
-			return []byte(app.secret), nil
-		})
+		jwtToken, err = app.user(c)
 		if err != nil {
-			panic("非法token")
+			panic("invalid token")
 		}
 	} else {
-		jwtToken = jwtUser.(map[string]interface{})["token"].(*lib.Token)
+		jwtToken = valInterface.(*lib.Token)
 	}
 
 	if claims, ok := jwtToken.Claims.(lib.MapClaims); ok && jwtToken.Valid {
-		var user map[string]interface{}
-		if err := json.Unmarshal([]byte(claims["user"].(string)), &user); err != nil {
-			panic("非法token")
+		if err := json.Unmarshal([]byte(claims["user"].(string)), userPointer); err != nil {
+			panic("invalid token")
 		}
-		c.Set("User", map[string]interface{}{
-			"token": jwtToken,
-			"user":  user,
-		})
-		return user
+		c.Set(contextJWTUser, userPointer)
 	} else {
-		panic("非法token")
+		panic("invalid token")
 	}
 }
 
 var timeZone, _ = time.LoadLocation("Asia/Shanghai")
 
-func (app *jwtManager) Login(http *http.Request, w http.ResponseWriter, user map[string]interface{}) interface{} {
+func (app *jwtManager) Login(http *http.Request, w http.ResponseWriter, user interface{}) interface{} {
 
 	token := lib.New(lib.GetSigningMethod(app.alg))
 	// Set some claims
@@ -125,4 +138,14 @@ func (app *jwtManager) Login(http *http.Request, w http.ResponseWriter, user map
 
 func (app *jwtManager) Logout(http *http.Request, w http.ResponseWriter) bool {
 	return true
+}
+
+func (app *jwtManager) Middleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !app.Check(c) {
+			app.filterFun(c)
+			c.Abort()
+		}
+		c.Next()
+	}
 }

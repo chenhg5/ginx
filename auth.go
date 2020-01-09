@@ -3,50 +3,23 @@ package ginx
 import (
 	"github.com/gin-gonic/gin"
 	"net/http"
-	"time"
 )
 
 type Auth interface {
 	Check(c *gin.Context) bool
-	User(c *gin.Context) interface{}
-	Login(http *http.Request, w http.ResponseWriter, user map[string]interface{}) interface{}
+	User(c *gin.Context, userPointer interface{})
+	Login(http *http.Request, w http.ResponseWriter, user interface{}) interface{}
 	Logout(http *http.Request, w http.ResponseWriter) bool
-}
-
-var JWTAuth Auth
-
-func RegisterJWTAuth(secret, alg, header string, exp time.Duration) {
-	if JWTAuth != nil {
-		panic("can not set twice!")
-	}
-	JWTAuth = newJwtAuthDriver(secret, alg, header, exp)
+	Middleware() gin.HandlerFunc
 }
 
 var defaultFilterRes = func(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
+	c.JSON(http.StatusUnauthorized, gin.H{
 		"code": http.StatusUnauthorized,
 		"msg":  "请先登录",
 	})
 }
 
-func SetDefaultFilterRes(d gin.HandlerFunc) {
-	defaultFilterRes = d
-}
-
-func JWTMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if !JWTAuth.Check(c) {
-			defaultFilterRes(c)
-			c.Abort()
-		}
-		c.Next()
-	}
-}
-
-func User(c *gin.Context) map[string]interface{} {
-	return JWTAuth.User(c).(map[string]interface{})
-}
-
-func JWTAuthToken(r *http.Request, w http.ResponseWriter, m map[string]interface{}) string {
-	return JWTAuth.Login(r, w, m).(string)
+func RegisterJWTAuth(cfg JWTAuthConfig) Auth {
+	return newJwtAuthDriver(cfg)
 }
